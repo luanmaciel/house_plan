@@ -1,0 +1,442 @@
+<title>Banheiro · visualização 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root{--bg:#EFECE5;--panel:#FBFAF7;--ink:#22262A;--muted:#6C7176;--line:#D9D4CA;--accent:#5F7355;--accent-ink:#FFFFFF;--chip:#E6E1D6;--warn:#B93A2B;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1B1D1F;--panel:#25282B;--ink:#ECEAE4;--muted:#A3A7AA;--line:#3A3E42;--accent:#8FA987;--accent-ink:#151815;--chip:#33373B;--warn:#E07A6B;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1B1D1F;--panel:#25282B;--ink:#ECEAE4;--muted:#A3A7AA;--line:#3A3E42;--accent:#8FA987;--accent-ink:#151815;--chip:#33373B;--warn:#E07A6B;color-scheme:dark}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:16px;line-height:1.45}
+.app{display:flex;height:100%;min-height:0}
+.stage{position:relative;flex:1;min-width:0;min-height:0}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row>*{pointer-events:auto}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tabs .lbl{align-self:center;font-size:12px;color:var(--muted);padding:0 6px 0 8px;text-transform:uppercase;letter-spacing:.06em}
+.views{display:flex;gap:6px;margin-left:auto}
+.views button,.tog{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;padding:7px 12px;border-radius:8px;cursor:pointer}
+.tog[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.labels{position:absolute;left:0;right:0;bottom:12px;display:flex;pointer-events:none}
+.labels div{flex:1;padding:0 16px}
+.labels span{display:inline-block;font-size:13px;background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:6px}
+.panel{width:360px;flex:none;overflow-y:auto;background:var(--panel);border-left:1px solid var(--line);padding:20px 16px 32px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+h1{font-size:22px;margin:0 0 2px;text-wrap:balance}
+h2{font-size:19px;margin:18px 0 2px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 12px}
+.sw{display:flex;gap:6px;margin:0 0 30px}
+.sw div{flex:1;height:44px;border-radius:6px;border:1px solid var(--line);position:relative}
+.sw span{position:absolute;left:0;right:0;bottom:-18px;font-size:11px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dl{margin:0;display:grid;grid-template-columns:1fr;gap:10px}
+dt{font-weight:700;font-size:14px}
+dd{margin:0;font-size:15px}
+.why{margin:16px 0 0;padding:12px;border-left:3px solid var(--accent);background:var(--chip);border-radius:0 8px 8px 0;font-size:15px}
+h3{font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:24px 0 6px}
+ul{margin:0;padding-left:18px;font-size:15px}
+li{margin:2px 0}
+.note{font-size:13px;color:var(--muted);margin-top:18px}
+.cmp{overflow-x:auto;margin:0 -16px;padding:0 16px}
+table{border-collapse:collapse;font-size:13px;min-width:560px;width:100%}
+th,td{text-align:left;vertical-align:top;padding:6px 6px;border-top:1px solid var(--line)}
+thead th{border-top:0;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+th[scope=row]{font-weight:700;width:20%}
+td.bad{color:var(--warn);font-weight:700}
+td.mid{color:var(--warn)}
+td.ok{color:var(--accent);font-weight:700}
+@media (max-width:760px){.app{flex-direction:column}.stage{flex:none;height:60vh}.panel{width:auto;border-left:0;border-top:1px solid var(--line)}.views{margin-left:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <div class="stage">
+    <canvas id="c" aria-label="Simulação 3D do banheiro nas quatro versões"></canvas>
+    <div class="hud">
+      <div class="row">
+        <div class="tabs" id="verL" role="group" aria-label="Versão do banheiro">
+          <span class="lbl">Versão</span>
+          <button data-v="orig">Original</button><button data-v="v1">Box estendido</button><button data-v="v1b">Box reduzido</button><button data-v="v1c">Pia de canto</button>
+        </div>
+        <div class="views">
+          <button id="vGeral">Geral</button><button id="vPorta">Da porta</button><button id="vBox">Box</button><button id="vPia">Pia</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="tabs" id="opts" role="group" aria-label="Acabamento">
+          <span class="lbl">Acabamento</span>
+          <button data-o="A">A · Areia</button><button data-o="B">B · Cimento</button><button data-o="C">C · Sálvia</button>
+        </div>
+        <button class="tog" id="cmp" aria-pressed="false">Comparar</button>
+        <div class="tabs" id="verR" role="group" aria-label="Versão à direita" hidden>
+          <span class="lbl">Direita</span>
+          <button data-v="orig">Original</button><button data-v="v1">Box estendido</button><button data-v="v1b">Box reduzido</button><button data-v="v1c">Pia de canto</button>
+        </div>
+      </div>
+    </div>
+    <div class="labels"><div><span id="labL"></span></div><div id="labRw" hidden><span id="labR"></span></div></div>
+  </div>
+  <aside class="panel">
+    <p class="eyebrow">Banheiro · 1,66 × 1,71 · nicho 0,70 × 1,00 · pé-direito 2,45</p>
+    <h1>Quatro versões, três acabamentos</h1>
+    <p class="sub">Porta na parede do hall abrindo para dentro, janela de 1,00 na parede externa. Box com 0,80 de fundo em todas as versões reformadas. Arraste para girar; "Comparar" abre a segunda versão ao lado, com a mesma câmera.</p>
+    <div class="cmp"><table>
+      <thead><tr><th></th><th>Original</th><th>Box estendido (V1)</th><th>Box reduzido (V1b)</th><th>Pia de canto (V1c)</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Box</th><td>0,70 × 1,00 no nicho, sem janela</td><td>1,66 × 0,80 na janela, porta de correr 0,80</td><td>1,00 × 0,80 na janela, porta pivotante 0,80</td><td>1,66 × 0,80 na janela, porta de correr 0,80</td></tr>
+        <tr><th scope="row">Vaso</th><td>canto da sala com a janela, sobre o coletor</td><td>no nicho de 0,70</td><td>no nicho de 0,70</td><td>no nicho de 0,70</td></tr>
+        <tr><th scope="row">Pia</th><td>parede do quarto 2, bancada de granito</td><td>parede da sala, na boca do nicho</td><td>embaixo da janela, junto ao quarto 2</td><td>triangular 0,60 × 0,45 no canto da sala com o box</td></tr>
+        <tr><th scope="row">Caminho até o vaso</th><td class="ok">livre</td><td class="bad">0,25 (pia tapa o nicho)</td><td class="ok">0,91</td><td class="mid">0,75 na diagonal (mínimo 0,60; NBR pede 0,80)</td></tr>
+        <tr><th scope="row">Vapor</th><td class="bad">box fechado, sem janela</td><td class="ok">box na janela</td><td class="ok">box na janela</td><td class="ok">box na janela</td></tr>
+        <tr><th scope="row">Banco e barras</th><td class="bad">não cabem</td><td class="ok">sim</td><td class="ok">sim</td><td class="ok">sim</td></tr>
+        <tr><th scope="row">Hidráulica</th><td>nenhuma</td><td>vaso vai ao nicho: tubo de 100 mm com caimento (vistoria)</td><td>igual à V1</td><td>igual à V1</td></tr>
+        <tr><th scope="row">Simulador</th><td>situação atual</td><td class="bad">1 checagem falha</td><td class="ok">todas passam</td><td class="mid">passa com ressalva</td></tr>
+      </tbody>
+    </table></div>
+    <div id="ver"></div>
+    <div id="opt"></div>
+    <h3>Nas versões reformadas, nas três opções</h3>
+    <ul>
+      <li>Vaso com caixa acoplada de altura conforto (46 cm) e barra de 0,60 em cada lado do nicho.</li>
+      <li>Banco articulado no box, barra de 0,80, ducha manual com barra deslizante, ralo linear, sem degrau.</li>
+      <li>Box com 0,80 de fundo: passa no mínimo do simulador, mas fica abaixo dos 0,90 × 0,95 que a NBR 9050 sugere com banco.</li>
+      <li>Gabinete suspenso (pé livre para limpar), torneira de alavanca, espelho com LED.</li>
+      <li>Plafon IP44 no centro, luminária IP65 dentro do box, arandela 4000 K no espelho, exaustor junto com a luz.</li>
+      <li>Piso sempre acetinado e antiderrapante (R10 ou mais), com contraste em relação à parede para marcar o chão.</li>
+    </ul>
+    <p class="note">Produtos citados são linhas de referência do mercado brasileiro; preço e medida ainda não foram conferidos na página da loja. A versão original está com o acabamento entregue: granito verde no piso, azulejo branco 20 × 30 e bancada de granito escuro.</p>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const OPT = {
+  A: {
+    nome: "Areia e madeira", sub: "claro e quente, o mais próximo do que já existe na casa",
+    pal: [["Parede", "#F1ECE3"], ["Piso", "#D3C5AC"], ["Madeira", "#B8895A"], ["Louça", "#F8F8F6"], ["Perfil", "#C9C9C5"]],
+    piso: {tw: .6, th: .6, color: "#D3C5AC", grout: "#BFB198", bond: "stack", rough: .8},
+    parede: {tw: .2, th: .1, color: "#F1ECE3", grout: "#D6D0C5", bond: "running", rough: .7},
+    destaque: null,
+    gab: "#B8895A", tampo: "#F4F2EE", metal: "#D9DBDC", perfil: "#CFCFCB", porta: "#B8895A", batente: "#FFFFFF", cuba: "semi", glass: "#E6F0F0",
+    itens: {
+      "Piso": "Porcelanato 60 × 60 bege areia, acetinado, antiderrapante R10 (linhas de Portobello, Eliane ou Portinari).",
+      "Revestimento": "Cerâmica metrô 10 × 20 branco fosco em todas as paredes até o teto, junta cinza-clara, assentamento corrido.",
+      "Cuba e gabinete": "Cuba semi-encaixe branca sobre gabinete suspenso amadeirado (mel), tampo branco.",
+      "Vaso": "Caixa acoplada altura conforto, branco (Deca Vogue Plus Conforto ou Celite Smart Clean).",
+      "Box": "Vidro incolor 8 mm com perfil de alumínio fosco ou branco.",
+      "Metais": "Cromado: torneira de alavanca, ducha, barras inox polido."
+    },
+    why: "Piso claro deixa água no chão visível e a borda do box contrastada; a madeira quente conversa com os armários e a cozinha atuais."
+  },
+  B: {
+    nome: "Cimento e grafite", sub: "contemporâneo, sem brilho, fácil de limpar",
+    pal: [["Parede", "#F2F2F0"], ["Piso", "#B7B7B2"], ["Grafite", "#4A4D50"], ["Louça", "#F8F8F8"], ["Preto", "#202224"]],
+    piso: {tw: .6, th: .6, color: "#B7B7B2", grout: "#A2A29D", bond: "stack", rough: .85},
+    parede: {tw: .9, th: .3, color: "#F2F2F0", grout: "#DCDCD8", bond: "running", rough: .55},
+    destaque: {tw: 1.2, th: .6, color: "#A9AAA6", grout: "#94958F", bond: "stack", rough: .75, walls: ["S"]},
+    gab: "#4A4D50", tampo: "#F5F5F3", metal: "#232527", perfil: "#202224", porta: "#EDECE8", batente: "#FFFFFF", cuba: "apoio", glass: "#E4EEF0",
+    itens: {
+      "Piso": "Porcelanato 60 × 60 cinza claro efeito cimento, acetinado, antiderrapante R10.",
+      "Revestimento": "Porcelanato 30 × 90 branco acetinado na horizontal; parede do box e da janela em 60 × 120 cinza cimento.",
+      "Cuba e gabinete": "Cuba de apoio branca sobre gabinete suspenso grafite, tampo branco.",
+      "Vaso": "Caixa acoplada altura conforto, branco (Deca, Celite ou Roca).",
+      "Box": "Vidro incolor 8 mm com perfil preto fosco.",
+      "Metais": "Torneira e ducha em preto fosco; barras de apoio em inox polido para ficarem visíveis."
+    },
+    why: "Cinza claro no chão esconde marca de água e de calcário; o perfil preto do box vira um contorno forte que o olho de 60+ lê de longe."
+  },
+  C: {
+    nome: "Sálvia e carvalho", sub: "cor no box, madeira clara no resto",
+    pal: [["Parede", "#F4F2EC"], ["Piso", "#C6AE8C"], ["Sálvia", "#9DB39F"], ["Louça", "#F8F7F3"], ["Champanhe", "#C6AE84"]],
+    piso: {tw: 1.2, th: .2, color: "#C6AE8C", grout: "#B09A78", bond: "running", rough: .7, wood: true},
+    parede: {tw: .2, th: .1, color: "#F4F2EC", grout: "#DAD6CC", bond: "running", rough: .7},
+    destaque: {tw: .2, th: .1, color: "#9DB39F", grout: "#86998A", bond: "running", rough: .25, walls: ["S", "N"]},
+    gab: "#C49A6C", tampo: "#F6F4EF", metal: "#C6AE84", perfil: "#C6AE84", porta: "#C49A6C", batente: "#FFFFFF", cuba: "apoio", glass: "#E8F1EE",
+    itens: {
+      "Piso": "Porcelanato 20 × 120 efeito carvalho claro, acetinado, antiderrapante R10 (linhas madeira de Portinari ou Eliane).",
+      "Revestimento": "Azulejo 10 × 20 verde sálvia brilhante no box e no nicho do vaso; metrô branco fosco no restante.",
+      "Cuba e gabinete": "Cuba de apoio oval branca sobre gabinete suspenso em freijó ou carvalho claro, tampo branco.",
+      "Vaso": "Caixa acoplada altura conforto, branco (Deca, Celite ou Roca).",
+      "Box": "Vidro incolor 8 mm com perfil champanhe escovado.",
+      "Metais": "Dourado escovado na torneira e na ducha; barras em inox polido."
+    },
+    why: "O verde marca onde é área molhada e onde é seca, ajuda a orientação de madrugada; a madeira clara no chão continua o tom da sala."
+  }
+};
+// acabamento entregue (fotos de 24/08): granito verde, azulejo branco 20 × 30 brilhante, bancada de granito escuro, porta de madeira escura
+const ORIG = {
+  piso: {tw: .6, th: .6, color: "#9EA38B", grout: "#8A8F77", bond: "stack", rough: .3, speckle: true},
+  parede: {tw: .3, th: .2, color: "#F3F3EF", grout: "#DCDCD6", bond: "stack", rough: .2},
+  destaque: null, gab: "#F2F2EE", tampo: "#3A3A38", metal: "#D9DBDC", perfil: "#BFC3C4", porta: "#6E4B30", batente: "#5A3E28", glass: "#8FCDB5"
+};
+const VER = {
+  orig: {nome: "Original", sub: "como o apartamento está sendo entregue", txt: "Chuveiro dentro do nicho de 0,70 × 1,00 com porta de vidro verde, sem janela: o vapor fica preso e não cabe banco nem barra. Vaso no canto da parede da sala com a janela, em cima do coletor de esgoto. Pia com bancada de granito na parede do quarto 2. Nada muda de lugar, nada de obra hidráulica."},
+  v1: {nome: "Box estendido", sub: "V1: box de 1,66 na janela, pia na parede da sala", txt: "Box de 1,66 × 0,80 ocupando toda a faixa da janela, porta de correr de 0,80 na ponta do hall. Vaso vai para o nicho e a pia para a parede da sala. Problema: a pia fica na boca do nicho e sobram 0,25 m para chegar ao vaso, quando o mínimo é 0,80 (checagem do simulador)."},
+  v1b: {nome: "Box reduzido", sub: "V1b: box de 1,00, pia embaixo da janela", txt: "Box de 1,00 × 0,80 no canto da sala, com porta pivotante de 0,80 abrindo para fora e 0,20 de vidro fixo. Pia de 0,60 embaixo da janela, encostada na parede do quarto 2, espelho de 0,60 × 0,60 sob o peitoril. Vaso no nicho com o caminho livre: 0,91 m de corredor entre o box e a parede do hall. Todas as checagens do simulador passam."},
+  v1c: {nome: "Pia de canto", sub: "V1c: box de 1,66, pia triangular no canto da sala", txt: "Box de 1,66 × 0,80 como na V1. A pia vira um triângulo de 0,60 × 0,45 no canto entre a parede da sala e o vidro do box, com a cuba perto do canto e o espelho na parede da sala. A diagonal abre a passagem para o nicho: do canto da lateral do nicho até a borda da pia sobram 0,75 m. Passa no mínimo de circulação (0,60), mas fica abaixo dos 0,80 que a NBR 9050 pede na aproximação do vaso. Quem entra no nicho passa de lado junto à pia."}
+};
+
+const W = 1.66, D = 1.71, H = 2.45;               // banho: x para leste (quarto 2), z para o sul (janela), y para cima
+const BZ = .91;                                    // frente do box: 0,80 de fundo até a janela
+const PX = 900;                                    // pixels por metro nas texturas
+let renderer, camera, controls, S;                 // S = cena em construção
+const state = {L: "orig", R: "v1c", opt: "A"};
+const scenes = {L: null, R: null};
+
+function tileTex(s) {
+  const cw = s.bond === "running" ? s.tw * 2 : s.tw, ch = s.bond === "running" ? s.th * 2 : s.th;
+  const c = document.createElement("canvas"); c.width = Math.round(cw * PX); c.height = Math.round(ch * PX);
+  const g = c.getContext("2d"); g.fillStyle = s.grout; g.fillRect(0, 0, c.width, c.height);
+  const tw = s.tw * PX, th = s.th * PX, gap = Math.max(1.2, .0025 * PX);
+  const rows = Math.round(ch / s.th), cols = Math.round(cw / s.tw) + 1;
+  const base = new THREE.Color(s.color);
+  for (let r = 0; r < rows; r++) {
+    const off = s.bond === "running" && r % 2 ? -tw / 2 : 0;
+    for (let k = -1; k < cols; k++) {
+      const x = k * tw + off, y = r * th, v = (Math.sin(r * 12.9898 + k * 78.233) * 43758.5453) % 1;
+      const col = base.clone().offsetHSL(0, 0, (v - .5) * .04);
+      g.fillStyle = "#" + col.getHexString(); g.fillRect(x + gap, y + gap, tw - 2 * gap, th - 2 * gap);
+      if (s.wood) { g.strokeStyle = "rgba(90,60,30,.10)"; g.lineWidth = 1;
+        for (let i = 0; i < 6; i++) { const yy = y + gap + (i + .5) * (th - 2 * gap) / 6 + Math.sin(k + i) * 4;
+          g.beginPath(); g.moveTo(x + gap, yy); g.bezierCurveTo(x + tw * .3, yy + 5, x + tw * .6, yy - 5, x + tw - gap, yy); g.stroke(); } }
+    }
+  }
+  if (s.speckle) for (let i = 0; i < 6000; i++) {                         // granito
+    g.fillStyle = Math.random() < .5 ? "rgba(35,45,30,.4)" : "rgba(235,238,225,.45)";
+    g.fillRect(Math.random() * c.width, Math.random() * c.height, 2 + Math.random() * 2, 2 + Math.random() * 2);
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); t.userData = {cw, ch}; return t;
+}
+function tileMat(tex, len, h, u0, v0, rough) {
+  const t = tex.clone(); t.needsUpdate = true; t.repeat.set(len / t.userData.cw, h / t.userData.ch);
+  t.offset.set((u0 / t.userData.cw) % 1, (v0 / t.userData.ch) % 1);
+  return new THREE.MeshStandardMaterial({map: t, roughness: rough, metalness: 0});
+}
+const std = (color, rough = .5, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({color, roughness: rough, metalness: 0}, extra));
+const metalMat = c => new THREE.MeshStandardMaterial({color: c, roughness: .35, metalness: .55});
+const glassMat = (c, op) => new THREE.MeshPhysicalMaterial({color: c, transparent: true, opacity: op, roughness: .05, metalness: 0, side: THREE.DoubleSide, depthWrite: false});
+
+function add(m, shadow = true) { m.castShadow = shadow; m.receiveShadow = true; S.add(m); return m; }
+function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x + w / 2, y + h / 2, z + d / 2); return add(m); }
+function cyl(r, h, mat, x, y, z, axis = "y") {          // (x,y,z) = base do cilindro
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 24), mat);
+  if (axis === "x") { m.rotation.z = -Math.PI / 2; m.position.set(x + h / 2, y, z); }
+  else if (axis === "z") { m.rotation.x = Math.PI / 2; m.position.set(x, y, z + h / 2); }
+  else m.position.set(x, y + h / 2, z);
+  return add(m);
+}
+function plane(w, h, mat, cx, cy, cz, rotY = 0, rotX = 0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.rotation.set(rotX, rotY, 0); m.position.set(cx, cy, cz); return add(m, false);
+}
+function prism(pts, y0, hgt, mat) {                       // prisma vertical a partir de um polígono no piso [(x,z)...]
+  const sh = new THREE.Shape(); pts.forEach(([x, z], i) => i ? sh.lineTo(x, -z) : sh.moveTo(x, -z)); sh.closePath();
+  const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, {depth: hgt, bevelEnabled: false}), mat);
+  m.rotation.x = -Math.PI / 2; m.position.y = y0; return add(m);
+}
+function disposeScene(sc) { if (sc) sc.traverse(n => { if (n.isMesh) { n.geometry.dispose(); [].concat(n.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } }); }
+
+function makeScene(ver, o) {
+  const f = ver === "orig" ? ORIG : o;                                     // acabamento
+  S = new THREE.Scene();
+  S.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#EFECE5");
+
+  // luzes
+  S.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, .55));
+  const sun = new THREE.DirectionalLight(0xfff4e0, .9); sun.position.set(.83, 3.4, 3.2); sun.target.position.set(.83, .4, .9);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, {left: -2.5, right: 2.5, top: 3, bottom: -2, near: .5, far: 9}); sun.shadow.bias = -.0005;
+  S.add(sun, sun.target);
+  const pl = (x, y, z, i, c = 0xfff1dc) => { const l = new THREE.PointLight(c, i, 5, 2); l.position.set(x, y, z); S.add(l); };
+  pl(.83, 2.3, .5, .55); pl(.5, 2.3, 1.3, .4); pl(.35, 1.9, -.5, .25);
+
+  // texturas e paredes (planos virados para dentro: quem está fora vê através)
+  const pisoT = tileTex(f.piso), parT = tileTex(f.parede), desT = f.destaque ? tileTex(f.destaque) : null;
+  const wallMat = (id, len, h, u0, v0) => {
+    const d = f.destaque && f.destaque.walls.includes(id);
+    return tileMat(d ? desT : parT, len, h, u0, v0, d ? f.destaque.rough : f.parede.rough);
+  };
+  const seg = (id, len, h, cx, cy, cz, rotY, u0, v0) => plane(len, h, wallMat(id, len, h, u0, v0), cx, cy, cz, rotY);
+  seg("W", 2.71, H, 0, H / 2, .355, Math.PI / 2, 0, 0);                      // parede da sala (x=0), do nicho até a janela
+  seg("E", D, H, W, H / 2, D / 2, -Math.PI / 2, 0, 0);                        // parede do quarto 2
+  seg("S", .33, H, .165, H / 2, D, Math.PI, 0, 0);                           // parede externa (janela)
+  seg("S", .33, H, 1.495, H / 2, D, Math.PI, 1.33, 0);
+  seg("S", 1.0, 1.55, .83, .775, D, Math.PI, .33, 0);
+  seg("S", 1.0, .35, .83, 2.275, D, Math.PI, .33, 2.1);
+  seg("N", .16, H, .78, H / 2, 0, 0, .7, 0);                                 // parede do hall, entre o nicho e a porta
+  seg("N", .80, .35, 1.26, 2.275, 0, 0, .86, 2.1);                           // sobre a porta
+  seg("N", .70, H, .35, H / 2, -1, 0, 0, 0);                                 // fundo do nicho
+  seg("N", 1.0, H, .70, H / 2, -.5, -Math.PI / 2, 0, 0);                     // lateral do nicho
+  plane(W, D, tileMat(pisoT, W, D, 0, 0, f.piso.rough), W / 2, 0, D / 2, 0, -Math.PI / 2);
+  plane(.70, 1.0, tileMat(pisoT, .7, 1, 0, 0, f.piso.rough), .35, 0, -.5, 0, -Math.PI / 2);
+  plane(W, D + 1, std("#F7F6F2", .9), W / 2, H, (D - 1) / 2, 0, Math.PI / 2);   // teto
+  const lum = std("#FFFFFF", .4, {emissive: 0xfff3dd, emissiveIntensity: .8});
+  if (ver === "orig") box(.62, .05, .10, lum, .55, H - .05, .30);             // calha fluorescente
+  else { cyl(.11, .03, lum, .83, H - .03, .5); cyl(.06, .02, lum, .5, H - .02, 1.3); }
+
+  // janela (1,00 × 0,55, peitoril 1,55) com céu atrás
+  const fr = std("#FFFFFF", .6);
+  box(1.0, .04, .06, fr, .33, 1.55, D - .03); box(1.0, .04, .06, fr, .33, 2.06, D - .03);
+  box(.04, .55, .06, fr, .33, 1.55, D - .03); box(.04, .55, .06, fr, 1.29, 1.55, D - .03);
+  plane(1.0, .55, std("#DCE9EF", .1, {transparent: true, opacity: .45}), .83, 1.825, D + .01, Math.PI);
+  plane(3, 2, std("#EAF2F6", 1, {emissive: 0xffffff, emissiveIntensity: .9}), .83, 1.9, D + .6, Math.PI);
+
+  // porta do banheiro na parede do hall (z = 0), x 0,86..1,66, dobradiça no canto do quarto 2, abre para dentro
+  const bat = std(f.batente, .6);
+  box(.05, 2.12, .02, bat, .84, 0, 0); box(.05, 2.12, .02, bat, W - .03, 0, 0); box(.87, .04, .02, bat, .84, 2.10, 0);
+  const porta = new THREE.Group(); porta.position.set(W, 0, 0); porta.rotation.y = 1.2; S.add(porta);
+  const folha = new THREE.Mesh(new THREE.BoxGeometry(.80, 2.10, .04), std(f.porta, .6)); folha.position.set(-.40, 1.05, .02); folha.castShadow = true; porta.add(folha);
+  const mac = new THREE.Mesh(new THREE.CylinderGeometry(.01, .01, .12, 16), metalMat(f.metal)); mac.rotation.x = Math.PI / 2; mac.position.set(-.72, 1.0, .06); porta.add(mac);
+
+  const louca = std("#FAFAF8", .18), met = metalMat(f.metal), inox = metalMat("#D7DADC"), perfil = std(f.perfil, .5, {metalness: .3});
+  const dark = std("#3A3B3C", .4), mirror = std("#E9EEF0", .08, {metalness: .45}), glow = std("#FFFFFF", 1, {emissive: 0xffffff, emissiveIntensity: .7});
+  const cubaG = new THREE.SphereGeometry(.21, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+
+  function vaso(cx, tankZ, dir) {                                           // dir +1: bacia cresce para +z; -1: para -z
+    box(.38, .40, .16, louca, cx - .19, .42, dir > 0 ? tankZ : tankZ - .16);
+    const bz = tankZ + dir * .45;
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(.19, .12, .40, 32), louca); b.scale.z = 1.45; b.position.set(cx, .21, bz); add(b);
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(.195, .195, .035, 32), louca); st.scale.z = 1.45; st.position.set(cx, .43, bz); add(st);
+  }
+  function cuba(cx, cz, sx, sz) {                                           // cuba semi-encaixe ou de apoio, centro (cx, cz), escala em x e z
+    const c = new THREE.Mesh(cubaG, louca);
+    if (f.cuba === "semi") { c.scale.set(sx, .5, sz); c.position.set(cx, .865, cz); }
+    else { c.scale.set(sx, .6, sz); c.position.set(cx, .945, cz); const r = cyl(.21, .005, louca, cx, .945, cz); r.scale.set(sx, 1, sz); }
+    add(c); return f.cuba === "semi" ? .17 : .29;                           // altura da torneira
+  }
+  function cubaGab(x, z, w, d, face) {                                     // gabinete retangular; face: "N" pessoa ao norte, "E" a leste
+    box(w, .45, d, std(f.gab, .55), x, .35, z);
+    box(w + .02, .02, d + .02, std(f.tampo, .3), x - .01, .80, z - .01);
+    const cx = x + w / 2, cz = z + d / 2, th = cuba(cx, cz, face === "N" ? 1 : .78, face === "N" ? .78 : 1);
+    if (face === "N") { cyl(.013, th, met, cx, .82, z + d - .06); cyl(.01, .14, met, cx, .82 + th - .01, z + d - .20, "z"); }
+    else { cyl(.013, th, met, x + .06, .82, cz); cyl(.01, .14, met, x + .06, .82 + th - .01, cz, "x"); }
+  }
+  const chuveiroSala = () => { box(.06, .16, .12, louca, 0, 1.98, 1.15); cyl(.012, .28, met, .05, 2.06, 1.21, "x"); cyl(.07, .015, met, .33, 2.03, 1.21);
+    cyl(.012, .80, met, .04, 1.0, 1.45); cyl(.02, .18, met, .04, 1.55, 1.49); };
+  const banco = () => { box(.30, .04, .40, std("#F4F4F2", .5), 0, .45, 1.28); box(.03, .10, .40, inox, 0, .40, 1.28); cyl(.012, .45, inox, .27, 0, 1.32); cyl(.012, .45, inox, .27, 0, 1.64); };
+  const boxLargo = glass => {                                               // box 1,66 × 0,80, porta de correr aberta 0,60 na ponta do hall
+    plane(.86, 2.0, glass, .43, 1.0, BZ, 0);
+    plane(.80, 2.0, glass, .66, 1.0, BZ + .035, 0);
+    box(1.66, .035, .06, perfil, 0, 2.0, BZ - .02); box(1.66, .015, .06, perfil, 0, 0, BZ - .02);
+    box(.03, 2.0, .03, perfil, 0, 0, BZ - .015); box(.03, 2.0, .03, perfil, W - .03, 0, BZ - .015);
+    box(.025, 2.0, .02, perfil, .26, 0, BZ + .025); box(.025, 2.0, .02, perfil, 1.045, 0, BZ + .025);
+    cyl(.008, .30, met, 1.03, .95, BZ + .05);
+    cyl(.016, .60, inox, W - .03, .85, 1.05, "z");                          // barra na parede do quarto 2, dentro do box
+  };
+
+  if (ver === "orig") {
+    // box atual dentro do nicho: porta de vidro verde na boca (z = 0), chuveiro no fundo
+    const gl = glassMat(f.glass, .4);
+    plane(.70, 2.0, gl, .35, 1.0, 0, 0);
+    box(.70, .035, .04, perfil, 0, 2.0, -.02); box(.70, .015, .04, perfil, 0, 0, -.02); box(.03, 2.0, .03, perfil, .67, 0, -.015);
+    cyl(.008, .25, met, .12, .95, .02);
+    box(.12, .16, .06, louca, .29, 1.98, -.99); cyl(.012, .28, met, .35, 2.06, -.93, "z"); cyl(.07, .015, met, .35, 2.03, -.65);
+    box(.10, .005, .10, dark, .30, 0, -.55);
+    // vaso no canto da sala com a janela, caixa na parede da janela; pia com bancada de granito na parede do quarto 2
+    vaso(.25, D - .01, -1);
+    box(.46, .60, .80, std(f.gab, .55), W - .46, .20, .88);
+    box(.50, .03, .84, std(f.tampo, .35), W - .50, .80, .86);
+    box(.40, .13, .32, louca, W - .46, .83, 1.10);
+    cyl(.013, .28, met, W - .06, .83, 1.26); cyl(.01, .14, met, W - .20, 1.10, 1.26, "x");
+    plane(.80, .80, mirror, W - .012, 1.50, 1.28, -Math.PI / 2);
+  } else {
+    vaso(.35, -.99, +1);                                                     // no nicho, caixa no fundo
+    cyl(.016, .60, inox, .03, .75, -.85, "z"); cyl(.016, .60, inox, .67, .75, -.85, "z");
+    chuveiroSala(); banco();
+    box(.60, .006, .06, dark, .05, 0, 1.62);                                 // ralo linear
+    const glass = glassMat(f.glass, .22);
+    if (ver === "v1") {
+      boxLargo(glass);
+      cubaGab(0, .05, .44, .60, "E");                                        // pia na parede da sala, na boca do nicho
+      plane(.60, .80, mirror, .014, 1.45, .35, Math.PI / 2); plane(.66, .86, glow, .008, 1.45, .35, Math.PI / 2);
+      pl(.3, 1.9, .35, .3, 0xffffff);
+    } else if (ver === "v1c") {
+      boxLargo(glass);
+      // pia triangular: catetos de 0,60 na parede da sala (z .31..BZ) e 0,45 no vidro do box; cuba perto do canto
+      prism([[0, .31], [0, BZ], [.45, BZ]], .35, .45, std(f.gab, .55));
+      prism([[0, .30], [0, BZ + .01], [.465, BZ + .01]], .80, .02, std(f.tampo, .3));
+      const th = cuba(.15, .76, .71, .71);
+      cyl(.013, th, met, .06, .82, BZ - .05); cyl(.01, .12, met, .06, .82 + th - .01, BZ - .17, "z");
+      plane(.60, .80, mirror, .014, 1.45, .61, Math.PI / 2); plane(.66, .86, glow, .008, 1.45, .61, Math.PI / 2);
+      pl(.3, 1.9, .61, .3, 0xffffff);
+    } else {
+      // box 1,00 × 0,80 no canto da sala; porta pivotante 0,80 abre para fora, dobradiça no lado da pia; pia embaixo da janela
+      plane(.20, 2.0, glass, .10, 1.0, BZ, 0);
+      plane(.80, 2.0, glass, 1.0, 1.0, BZ + .40, -Math.PI / 2);
+      box(1.0, .035, .04, perfil, 0, 2.0, BZ - .02); box(1.0, .015, .04, perfil, 0, 0, BZ - .02);
+      box(.04, .035, .80, perfil, .98, 2.0, BZ); box(.04, .015, .80, perfil, .98, 0, BZ);
+      box(.03, 2.0, .03, perfil, 0, 0, BZ - .015); box(.03, 2.0, .03, perfil, .985, 0, BZ - .015); box(.03, 2.0, .03, perfil, .985, 0, D - .03);
+      const pbox = new THREE.Group(); pbox.position.set(.985, 0, BZ - .01); pbox.rotation.y = -.5; S.add(pbox);
+      const vidro = new THREE.Mesh(new THREE.PlaneGeometry(.78, 2.0), glass); vidro.position.set(-.39, 1.0, 0); pbox.add(vidro);
+      [-.02, -.77].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(.025, 2.0, .02), perfil); p.position.set(x, 1.0, 0); pbox.add(p); });
+      const pux = new THREE.Mesh(new THREE.CylinderGeometry(.008, .008, .30, 16), met); pux.position.set(-.70, 1.05, .03); pbox.add(pux);
+      cyl(.016, .80, inox, .10, .85, D - .04, "x");                          // barra 0,80 na parede da janela
+      cubaGab(1.06, D - .44, .60, .44, "N");
+      plane(.60, .60, mirror, 1.36, 1.20, D - .014, Math.PI); plane(.66, .66, glow, 1.36, 1.20, D - .008, Math.PI);
+      pl(1.36, 1.7, 1.45, .3, 0xffffff);
+    }
+  }
+  return S;
+}
+
+function rebuild() {
+  const o = OPT[state.opt];
+  disposeScene(scenes.L); disposeScene(scenes.R);
+  scenes.L = makeScene(state.L, o); scenes.R = state.R ? makeScene(state.R, o) : null;
+  document.querySelectorAll("#verL button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === state.L)));
+  document.querySelectorAll("#verR button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === state.R)));
+  document.querySelectorAll("#opts button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.o === state.opt)));
+  document.getElementById("cmp").setAttribute("aria-pressed", String(!!state.R));
+  document.getElementById("verR").hidden = !state.R; document.getElementById("labRw").hidden = !state.R;
+  document.getElementById("labL").textContent = VER[state.L].nome + " · " + VER[state.L].sub;
+  if (state.R) document.getElementById("labR").textContent = VER[state.R].nome + " · " + VER[state.R].sub;
+  const v = VER[state.L];
+  document.getElementById("ver").innerHTML = `<h2>${v.nome}</h2><p class="sub">${v.sub}</p><p>${v.txt}</p>`;
+  const sw = o.pal.map(([n, c]) => `<div style="background:${c}"><span>${n}</span></div>`).join("");
+  const dl = Object.entries(o.itens).map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+  document.getElementById("opt").innerHTML = `<h3>Acabamento ${state.opt} (versões reformadas)</h3><h2>${o.nome}</h2><p class="sub">${o.sub}</p><div class="sw">${sw}</div><dl>${dl}</dl><p class="why"><b>Por que para 60+:</b> ${o.why}</p>`;
+}
+
+const VIEWS = {
+  vGeral: () => [[3.1, 3.1, -1.3], [.75, .6, .75]],
+  vPorta: () => [[1.2, 1.5, .05], [.45, .85, 1.3]],
+  vBox: () => ({orig: [[1.1, 1.5, .5], [.35, 1.0, -.6]], v1: [[1.4, 1.5, 1.05], [.15, 1.0, 1.5]], v1c: [[1.4, 1.5, 1.05], [.15, 1.0, 1.5]], v1b: [[1.0, 1.5, .5], [.15, .9, 1.5]]})[state.L],
+  vPia: () => ({orig: [[.7, 1.45, .8], [1.6, .95, 1.3]], v1: [[1.25, 1.4, .3], [0, 1.1, .35]], v1c: [[1.2, 1.4, .2], [.1, 1.0, .7]], v1b: [[1.1, 1.45, .5], [1.4, .95, 1.65]]})[state.L]
+};
+function view(id) { const [p, t] = VIEWS[id](); camera.position.set(...p); controls.target.set(...t); controls.update(); }
+
+function init() {
+  const cv = document.getElementById("c");
+  renderer = new THREE.WebGLRenderer({canvas: cv, antialias: true, preserveDrawingBuffer: true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.setScissorTest(true);
+  camera = new THREE.PerspectiveCamera(50, 1, .05, 30);
+  controls = new THREE.OrbitControls(camera, cv); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * .52; controls.minDistance = .4; controls.maxDistance = 7;
+  // #v1c-B-vPorta abre direto; #orig-v1c-A-vGeral abre comparando
+  const hs = location.hash.slice(1).split("-").filter(Boolean), vs = hs.filter(t => VER[t]);
+  if (vs.length) { state.L = vs[0]; state.R = vs[1] || null; }
+  const ho = hs.find(t => OPT[t]); if (ho) state.opt = ho;
+  rebuild(); view(hs.find(t => VIEWS[t]) || "vGeral");
+  const fit = () => { renderer.setSize(cv.clientWidth, cv.clientHeight, false); };
+  new ResizeObserver(fit).observe(cv.parentElement); fit();
+  document.querySelectorAll("#verL button").forEach(b => b.onclick = () => { state.L = b.dataset.v; rebuild(); });
+  document.querySelectorAll("#verR button").forEach(b => b.onclick = () => { state.R = b.dataset.v; rebuild(); });
+  document.querySelectorAll("#opts button").forEach(b => b.onclick = () => { state.opt = b.dataset.o; rebuild(); });
+  document.getElementById("cmp").onclick = () => { state.R = state.R ? null : (state.L === "v1c" ? "orig" : "v1c"); rebuild(); };
+  Object.keys(VIEWS).forEach(id => document.getElementById(id).onclick = () => view(id));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rebuild);
+  (function loop() {
+    controls.update();
+    const w = cv.clientWidth, h = cv.clientHeight, panes = scenes.R ? [scenes.L, scenes.R] : [scenes.L], pw = Math.floor(w / panes.length);
+    panes.forEach((sc, i) => {
+      renderer.setViewport(i * pw, 0, pw, h); renderer.setScissor(i * pw, 0, pw, h);
+      camera.aspect = pw / h; camera.updateProjectionMatrix(); renderer.render(sc, camera);
+    });
+    requestAnimationFrame(loop);
+  })();
+}
+init();
+</script>

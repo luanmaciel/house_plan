@@ -1,0 +1,29 @@
+# segredos
+.env
+.env.*
+
+# dados do apartamento real e saídas geradas
+out/
+outputs/
+Ape_pais/
+Ape_pais*/
+inputs/fotos/
+*.dwg
+*.pdf
+*.sldprt
+*.sldasm
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.mp4
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# sistema
+~$*
+.DS_Store
+Thumbs.db
